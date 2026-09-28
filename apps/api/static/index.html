@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DB Change Copilot</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #16181d; --muted: #5e6573; --faint: #8a91a0; --line: #e3e6eb; --soft: #f0f2f5;
+  --accent: #3b5bdb; --accent-ink: #fff; --code: #f3f4f7;
+  --ok: #2b8a3e; --ok-bg: #e6f4ea; --warn: #b35c00; --warn-bg: #fff3e0; --bad: #c92a2a; --bad-bg: #fdecec; --info: #1864ab; --info-bg: #e7f1fb;
+  --crit: #862e9c; --crit-bg: #f6e8fa;
+  --radius: 10px; --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111317; --panel: #1a1d23; --ink: #e8eaee; --muted: #a2a9b6; --faint: #737b89; --line: #2c3139; --soft: #22262d;
+    --accent: #6f8cff; --accent-ink: #0d1020; --code: #15181d;
+    --ok: #69db7c; --ok-bg: #16301d; --warn: #ffb454; --warn-bg: #33250f; --bad: #ff8787; --bad-bg: #3a1a1a; --info: #74c0fc; --info-bg: #13283b;
+    --crit: #e599f7; --crit-bg: #33183b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+button, input, select, textarea { font: inherit; color: inherit; }
+header { display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 16px; }
+.brand small { font-weight: 400; color: var(--muted); font-size: 13px; }
+.logo { width: 28px; height: 28px; border-radius: 7px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+nav { display: flex; gap: 4px; margin-left: auto; }
+nav button { background: none; border: 0; padding: 6px 12px; border-radius: 6px; cursor: pointer; color: var(--muted); }
+nav button.on { background: var(--soft); color: var(--ink); font-weight: 600; }
+.btn { border: 1px solid var(--line); background: var(--panel); padding: 7px 14px; border-radius: 7px; cursor: pointer; font-weight: 550; }
+.btn:hover { background: var(--soft); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+main { padding: 20px 24px; max-width: 1440px; margin: 0 auto; }
+.layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
+.layout > *, .grid2 > * { min-width: 0; }
+.card table { display: block; overflow-x: auto; }
+.card table tbody { display: table; width: 100%; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+.card + .card { margin-top: 16px; }
+.card h3 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+input, select, textarea { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; }
+textarea { font-family: var(--mono); font-size: 12.5px; min-height: 130px; resize: vertical; background: var(--code); }
+input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); border-color: var(--accent); }
+.row { display: flex; gap: 8px; align-items: center; }
+.list { display: flex; flex-direction: column; gap: 6px; }
+.item { text-align: left; background: none; border: 1px solid transparent; border-radius: 8px; padding: 9px 10px; cursor: pointer; width: 100%; }
+.item:hover { background: var(--soft); }
+.item.on { background: var(--soft); border-color: var(--line); }
+.item .t { font-weight: 550; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .m { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; margin-top: 3px; }
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; letter-spacing: .02em; white-space: nowrap; }
+.LOW, .APPROVED, .DEPLOYED, .done { background: var(--ok-bg); color: var(--ok); }
+.MEDIUM, .PENDING_APPROVAL, .active, .ANALYZING { background: var(--info-bg); color: var(--info); }
+.HIGH, .warn, .ROLLED_BACK { background: var(--warn-bg); color: var(--warn); }
+.CRITICAL { background: var(--crit-bg); color: var(--crit); }
+.BLOCKED, .REJECTED, .FAILED, .failed { background: var(--bad-bg); color: var(--bad); }
+.pending, .skipped { background: var(--soft); color: var(--faint); }
+.empty { color: var(--muted); text-align: center; padding: 60px 20px; }
+.head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.head h2 { margin: 2px 0 4px; font-size: 20px; }
+.sub { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+summary, .banner { overflow-wrap: anywhere; }
+.mono { font-family: var(--mono); font-size: 12.5px; }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 8px 4px; margin-top: 16px; }
+.step { text-align: center; font-size: 11.5px; }
+.step .bar { height: 5px; border-radius: 3px; margin-bottom: 6px; }
+.step.done .bar { background: var(--ok); } .step.warn .bar { background: var(--warn); } .step.failed .bar { background: var(--bad); }
+.step.active .bar { background: var(--info); } .step.pending .bar, .step.skipped .bar { background: var(--line); }
+.step { background: none !important; color: var(--muted) !important; }
+.step.done, .step.warn, .step.failed, .step.active { color: var(--ink) !important; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+.grid2 > .card + .card { margin-top: 0; }
+.score { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+.ring { --p: 0; --c: var(--ok); width: 84px; height: 84px; border-radius: 50%; background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--soft) 0); display: grid; place-items: center; flex: none; }
+.ring span { width: 66px; height: 66px; border-radius: 50%; background: var(--panel); display: grid; place-items: center; font-size: 22px; font-weight: 700; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+pre { background: var(--code); border: 1px solid var(--line); border-radius: 7px; padding: 10px 12px; margin: 8px 0 0; overflow-x: auto; font-family: var(--mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.banner { padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 10px; }
+.activity { display: flex; flex-direction: column; }
+.act { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.act:last-child { border-bottom: 0; }
+.act b { font-weight: 600; display: block; }
+.act small { color: var(--faint); font-size: 11.5px; }
+.check { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; font-size: 13px; }
+.check i { font-style: normal; font-weight: 700; width: 14px; }
+.check.ok i { color: var(--ok); } .check.no i { color: var(--bad); }
+.roles { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+details { margin-top: 8px; } summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.toast { position: fixed; bottom: 20px; left: 16px; right: 16px; width: fit-content; margin-left: auto; background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; max-width: min(420px, calc(100vw - 40px)); opacity: 0; transform: translateY(8px); transition: .2s; pointer-events: none; z-index: 20; }
+.toast.show { opacity: 1; transform: none; }
+.schema { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.muted { color: var(--muted); }
+.spin { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: s .7s linear infinite; vertical-align: -2px; }
+@keyframes s { to { transform: rotate(360deg); } }
+@media (max-width: 980px) { .layout, .grid2 { grid-template-columns: 1fr; } header { flex-wrap: wrap; padding: 12px 16px; } main { padding: 16px; } .act { grid-template-columns: 1fr; gap: 2px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="logo">DB</div><div>DB Change Copilot <small>· agentic change management · sandbox</small></div></div>
+  <nav>
+    <button data-view="changes" class="on">Changes</button>
+    <button data-view="schema">Schema</button>
+    <button data-view="audit">Audit log</button>
+  </nav>
+  <button class="btn" id="reset" title="Re-seed the sandbox and clear all changes">Reset demo</button>
+</header>
+<main>
+  <section id="v-changes" class="layout">
+    <aside>
+      <form class="card" id="form">
+        <h3>New change request</h3>
+        <label for="sample">Start from a sample</label>
+        <select id="sample"><option value="">Choose a sample…</option></select>
+        <label for="title">Title</label>
+        <input id="title" required placeholder="e.g. Add loyalty tier to customers">
+        <label for="by">Requested by</label>
+        <input id="by" value="priya.dev">
+        <label for="sql">SQL</label>
+        <textarea id="sql" required spellcheck="false" placeholder="ALTER TABLE ..."></textarea>
+        <div class="row" style="margin-top:12px"><button class="btn primary" id="submit" type="submit" style="flex:1">Run agents</button></div>
+      </form>
+      <div class="card">
+        <h3>Change requests</h3>
+        <div class="list" id="changes"><div class="muted" style="font-size:13px">None yet. Submit one above.</div></div>
+      </div>
+    </aside>
+    <div id="detail"><div class="card empty">Pick a sample on the left and press <b>Run agents</b>.<br>The agents parse the SQL, map dependencies, dry-run it on a production clone, rehearse the rollback, generate synthetic test data and score the risk.</div></div>
+  </section>
+  <section id="v-schema" hidden></section>
+  <section id="v-audit" hidden></section>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const label = s => esc(String(s).replace(/_/g, " "));
+const fmtTime = iso => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+let samples = [], current = null, view = "changes";
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data));
+  return data;
+}
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 3800); }
+
+async function loadList() {
+  const list = await api("/api/changes");
+  $("#changes").innerHTML = list.length ? list.map(c => `
+    <button class="item ${current && current.id === c.id ? "on" : ""}" data-id="${esc(c.id)}">
+      <span class="t">${esc(c.title)}</span>
+      <span class="m"><span class="mono">${esc(c.id)}</span><span class="pill ${esc(c.status)}">${label(c.status)}</span>${c.risk ? `<span class="pill ${esc(c.risk)}">${esc(c.risk)} ${c.score}</span>` : ""}</span>
+    </button>`).join("") : `<div class="muted" style="font-size:13px">None yet. Submit one above.</div>`;
+}
+
+async function open(id) { current = await api(`/api/changes/${id}`); render(); loadList(); }
+
+function render() {
+  const c = current; if (!c) return;
+  const r = c.risk || {}, reh = c.rehearsal || {};
+  const ringColor = { LOW: "var(--ok)", MEDIUM: "var(--info)", HIGH: "var(--warn)", CRITICAL: "var(--crit)" }[r.level] || "var(--faint)";
+  const stmt = i => i === null || i === undefined ? "change" : `#${i + 1}`;
+  const got = new Set((c.approvals || []).filter(a => a.decision === "APPROVED").map(a => a.role));
+  $("#detail").innerHTML = `
+  <div class="card">
+    <div class="head">
+      <div>
+        <div class="sub mono">${esc(c.id)}${c.jira ? ` · ${esc(c.jira.key)}` : ""}${c.git ? ` · ${esc(c.git.branch)}` : ""}</div>
+        <h2>${esc(c.title)}</h2>
+        <div class="sub">Requested by <b>${esc(c.requested_by)}</b> · ${fmtTime(c.created_at)} · touches ${(c.affected_tables || []).map(t => `<span class="mono">${esc(t)}</span>`).join(", ") || "-"}</div>
+      </div>
+      <div class="row"><span class="pill ${esc(c.status)}" style="font-size:13px;padding:3px 12px">${label(c.status)}</span></div>
+    </div>
+    <div class="steps">${c.stages.map(s => `<div class="step ${esc(s.status)}" title="${esc(s.agent)}: ${esc(s.summary)}"><div class="bar"></div>${esc(s.name)}</div>`).join("")}</div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Risk assessment</h3>
+      <div class="score">
+        <div class="ring" style="--p:${r.score || 0};--c:${ringColor}"><span>${r.score ?? "-"}</span></div>
+        <div><span class="pill ${esc(r.level)}" style="font-size:13px;padding:3px 12px">${esc(r.level || "")}</span>
+          <div class="sub" style="margin-top:6px">${r.required_approvals && r.required_approvals.length ? `Needs approval from <b>${r.required_approvals.map(esc).join(" + ")}</b>` : "Auto-approved by policy"}</div></div>
+      </div>
+      <table><tr><th>Stmt</th><th>Factor</th><th style="text-align:right">Pts</th></tr>
+      ${(r.factors || []).map(f => `<tr><td class="mono">${stmt(f.statement)}</td><td>${esc(f.factor)}</td><td class="num">+${f.points}</td></tr>`).join("")}</table>
+    </div>
+    <div class="card">${actions(c, got)}</div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Agent activity</h3>
+    <div class="activity">${c.stages.filter(s => s.status !== "pending").map(s => `
+      <div class="act"><div><span class="pill ${esc(s.status)}">${label(s.status)}</span><br><small>${fmtTime(s.at)}</small></div>
+      <div><b>${esc(s.name)} <span class="muted" style="font-weight:400">· ${esc(s.agent)}</span></b>${esc(s.summary)}</div></div>`).join("")}</div>
+  </div>
+
+  <div class="card"><h3>Statements</h3>
+    <table><tr><th>#</th><th>Operation</th><th>Target</th><th style="text-align:right">Rows affected</th><th>Rollback</th></tr>
+    ${c.statements.map((s, i) => { const p = (c.rollback_plan || []).find(p => p.statement === s.index);
+      return `<tr><td class="mono">${i + 1}</td><td>${label(s.kind)}</td><td class="mono">${esc(s.target)}</td>
+      <td class="num">${s.rows_affected == null ? "-" : Number(s.rows_affected).toLocaleString()}</td>
+      <td>${p ? `<span class="pill ${p.reversible === true ? "done" : "warn"}">${p.reversible === true ? "reversible" : p.reversible === "partial" ? "partial" : "snapshot"}</span> <span class="sub">${esc(p.strategy)}</span>` : "-"}</td></tr>`; }).join("")}
+    </table>
+    <details><summary>Submitted SQL</summary><pre>${esc(c.sql)}</pre></details>
+  </div>
+
+  <div class="card"><h3>Dependencies</h3>
+    ${(c.dependencies || []).length ? `<table><tr><th>Stmt</th><th>Object</th><th>Type</th><th>Relation</th><th>Impact</th></tr>
+    ${c.dependencies.map(d => `<tr><td class="mono">${stmt(d.statement)}</td><td class="mono">${esc(d.object)}</td><td>${esc(d.type)}</td><td>${esc(d.relation)}</td>
+      <td><span class="pill ${{ BREAKS: "failed", IMPACTED: "warn", FIRES: "active" }[d.impact] || "pending"}">${esc(d.impact)}</span></td></tr>`).join("")}</table>`
+      : `<div class="muted">No dependent objects found.</div>`}
+  </div>
+
+  <div class="card"><h3>Rollback plan</h3>
+    ${reh.forward_ok === false ? `<div class="banner failed">Dry run failed, so there is nothing to roll back: <b>${esc(reh.error)}</b></div>` :
+      reh.verified ? `<div class="banner done">Rehearsed on a production clone: change applied, rolled back, and schema + row checksums matched the original exactly.</div>` :
+      `<div class="banner warn">Rehearsal did not fully verify: ${esc((reh.diff || []).join("; "))}</div>`}
+    ${(c.rollback_plan || []).some(p => p.backup.length) ? `<div class="sub">Pre-deploy backups (run automatically inside the deploy transaction):</div><pre>${esc(c.rollback_plan.flatMap(p => p.backup).join(";\n") + ";")}</pre>` : ""}
+    ${(c.rollback_script || []).length ? `<div class="sub" style="margin-top:10px">Rollback script:</div><pre>${esc(c.rollback_script.join(";\n") + ";")}</pre>` : ""}
+  </div>
+
+  ${c.tests ? `<div class="card"><h3>Synthetic test data &amp; regression checks</h3>
+    ${c.tests.checks.map(k => `<div class="check ${k.passed ? "ok" : "no"}"><i>${k.passed ? "✓" : "✕"}</i><span>${esc(k.name)} <span class="muted">· ${esc(k.detail)}</span></span></div>`).join("")}
+    ${c.tests.tables.filter(t => t.sample.length).map(t => { const cols = Object.keys(t.sample[0]);
+      return `<details><summary>Sample generated rows · <span class="mono">${esc(t.table)}</span></summary><div style="overflow-x:auto"><table><tr>${cols.map(k => `<th>${esc(k)}</th>`).join("")}</tr>
+      ${t.sample.map(row => `<tr>${cols.map(k => `<td class="mono">${esc(row[k])}</td>`).join("")}</tr>`).join("")}</table></div></details>`; }).join("")}
+  </div>` : ""}
+
+  ${c.deployment ? `<div class="card"><h3>Deployment</h3>
+    ${c.deployment.error ? `<div class="banner failed">Deploy failed and the transaction was rolled back: ${esc(c.deployment.error)}</div>` : `
+    <div class="sub">Deployed by <b>${esc(c.deployment.by)}</b> at ${fmtTime(c.deployment.at)}</div>
+    <div style="margin-top:8px">${c.deployment.checks.map(k => `<div class="check ${k.passed ? "ok" : "no"}"><i>${k.passed ? "✓" : "✕"}</i><span>${esc(k.name)}</span></div>`).join("")}</div>
+    <table style="margin-top:8px"><tr><th>Table</th><th style="text-align:right">Rows before</th><th style="text-align:right">Rows after</th></tr>
+    ${c.deployment.row_counts.map(x => `<tr><td class="mono">${esc(x.table)}</td><td class="num">${x.before ?? "-"}</td><td class="num">${x.after ?? "-"}</td></tr>`).join("")}</table>`}
+    ${c.rollback_result ? `<div class="banner ${c.rollback_result.verified ? "done" : "warn"}" style="margin-top:12px">
+      Rolled back by <b>${esc(c.rollback_result.by)}</b> using <b>${esc(c.rollback_result.method)}</b>${c.rollback_result.reason ? ` (${esc(c.rollback_result.reason)})` : ""}.
+      ${c.rollback_result.verified ? "Verified: schema and data checksums match the pre-deploy state." : "Drift: " + esc(c.rollback_result.diff.join("; "))}</div>` : ""}
+  </div>` : ""}
+
+  ${c.git ? `<div class="card"><h3>Git &amp; Jira (simulated)</h3>
+    <div class="sub">Ticket <b class="mono">${esc(c.jira.key)}</b> · priority ${esc(c.jira.priority)} · assignee ${esc(c.jira.assignee)} · labels ${c.jira.labels.map(esc).join(", ")}</div>
+    <div class="sub">Branch <b class="mono">${esc(c.git.branch)}</b> · commit <span class="mono">${esc(c.git.commit)}</span></div>
+    ${Object.entries(c.git.files).map(([p, body]) => `<details><summary class="mono">${esc(p)}</summary><pre>${esc(body)}</pre></details>`).join("")}
+  </div>` : ""}`;
+  bindActions();
+}
+
+function actions(c, got) {
+  const need = (c.risk && c.risk.required_approvals) || [];
+  let h = `<h3>Approval &amp; release</h3>`;
+  if (need.length) h += `<div class="roles">${need.map(r => `<span class="pill ${got.has(r) ? "done" : "pending"}">${got.has(r) ? "✓" : "○"} ${esc(r)}</span>`).join("")}</div>`;
+  h += (c.approvals || []).map(a => `<div class="check ${a.decision === "APPROVED" ? "ok" : "no"}"><i>${a.decision === "APPROVED" ? "✓" : "✕"}</i><span><b>${esc(a.approver)}</b> ${a.role !== "-" ? `(${esc(a.role)})` : ""} ${esc(a.decision.toLowerCase())}${a.comment ? ` · <span class="muted">${esc(a.comment)}</span>` : ""}</span></div>`).join("");
+  if (c.status === "PENDING_APPROVAL") {
+    const open = need.filter(r => !got.has(r));
+    h += `<div class="row" style="margin-top:10px"><input id="apname" placeholder="Approver name" value="${open[0] === "CAB" ? "cab.board" : open[0] === "DBA" ? "dana.dba" : "lee.lead"}">
+      <select id="aprole" style="width:110px">${open.map(r => `<option>${esc(r)}</option>`).join("")}</select></div>
+      <input id="apnote" placeholder="Comment (optional)" style="margin-top:8px">
+      <div class="row" style="margin-top:10px"><button class="btn primary" data-act="approve">Approve</button><button class="btn danger" data-act="reject">Reject</button></div>`;
+  } else if (c.status === "APPROVED") {
+    h += `<p class="sub">Approved and ready. Deploy runs the backups and the change in one transaction, then validates and monitors.</p>
+      <div class="row"><button class="btn primary" data-act="deploy">Deploy to production</button><button class="btn danger" data-act="reject">Reject</button></div>`;
+  } else if (c.status === "DEPLOYED") {
+    h += `<p class="sub">Live in production. Rollback uses the rehearsed script${(c.rollback_plan || []).every(p => p.reversible === true) ? "" : " (falls back to the pre-deploy snapshot)"}.</p>
+      <input id="rbreason" placeholder="Reason for rollback" value="Demo: verify rollback">
+      <div class="row" style="margin-top:10px"><button class="btn danger" data-act="rollback">Roll back</button></div>`;
+  } else if (c.status === "BLOCKED") {
+    h += `<div class="banner failed" style="margin-top:8px">Blocked. This change fails against a clone of production and can't be approved. Fix the SQL and resubmit.</div>`;
+  } else if (c.status === "REJECTED") {
+    h += `<div class="banner failed" style="margin-top:8px">Rejected.</div>`;
+  } else if (c.status === "ROLLED_BACK") {
+    h += `<div class="banner warn" style="margin-top:8px">Rolled back. See the deployment section below.</div>`;
+  } else if (c.status === "FAILED") {
+    h += `<div class="banner failed" style="margin-top:8px">Deployment failed; production was left untouched.</div>`;
+  }
+  return h;
+}
+
+function bindActions() {
+  document.querySelectorAll("[data-act]").forEach(b => b.onclick = async () => {
+    const act = b.dataset.act, id = current.id;
+    const orig = b.innerHTML; b.disabled = true; b.innerHTML = `<span class="spin"></span>`;
+    try {
+      if (act === "approve") current = await api(`/api/changes/${id}/approve`, { approver: $("#apname").value, role: $("#aprole").value, comment: $("#apnote").value });
+      if (act === "reject") current = await api(`/api/changes/${id}/reject`, { approver: ($("#apname") && $("#apname").value) || "reviewer", reason: ($("#apnote") && $("#apnote").value) || "Rejected in review" });
+      if (act === "deploy") current = await api(`/api/changes/${id}/deploy`, { actor: "release.bot" });
+      if (act === "rollback") current = await api(`/api/changes/${id}/rollback`, { actor: "dana.dba", reason: $("#rbreason").value });
+      toast(`${id}: ${current.status.replace(/_/g, " ").toLowerCase()}`);
+      render(); loadList();
+    } catch (e) { toast(e.message); b.disabled = false; b.innerHTML = orig; }
+  });
+}
+
+async function showSchema() {
+  const s = await api("/api/schema");
+  $("#v-schema").innerHTML = `<div class="schema">${s.tables.map(t => `<div class="card" style="margin:0">
+    <h3 style="display:flex;justify-content:space-between;text-transform:none;letter-spacing:0;font-size:15px;color:var(--ink)"><span class="mono">${esc(t.name)}</span><span class="sub">${t.rows.toLocaleString()} rows</span></h3>
+    <table>${t.columns.map(c => `<tr><td class="mono">${esc(c.name)}${c.pk ? ' <span class="pill active">PK</span>' : ""}</td><td class="muted">${esc(c.type)}${c.notnull ? " not null" : ""}${c.default != null ? ` = ${esc(c.default)}` : ""}</td></tr>`).join("")}</table>
+    ${t.foreign_keys.map(f => `<div class="sub mono" style="margin-top:6px">${esc(f.column)} → ${esc(f.references)}</div>`).join("")}</div>`).join("")}</div>
+    <div class="card" style="margin-top:16px"><h3>Indexes, views &amp; triggers</h3>
+    ${s.objects.map(o => `<details><summary><span class="pill pending">${esc(o.type)}</span> <span class="mono">${esc(o.name)}</span> <span class="muted">on ${esc(o.table)}</span></summary><pre>${esc(o.sql)}</pre></details>`).join("")}</div>`;
+}
+
+async function showAudit() {
+  const a = await api("/api/audit");
+  $("#v-audit").innerHTML = `<div class="card"><h3>Audit log · ${a.length} events</h3><div style="overflow-x:auto"><table>
+    <tr><th>Time</th><th>Change</th><th>Actor</th><th>Action</th><th>Detail</th></tr>
+    ${a.map(e => `<tr><td class="mono">${fmtTime(e.at)}</td><td class="mono">${esc(e.change_id || "-")}</td><td>${esc(e.actor)}</td><td class="mono">${esc(e.action)}</td><td>${esc(e.detail)}</td></tr>`).join("") || `<tr><td colspan="5" class="muted">No events yet.</td></tr>`}
+  </table></div></div>`;
+}
+
+function setView(v) {
+  view = v;
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.view === v));
+  ["changes", "schema", "audit"].forEach(k => $(`#v-${k}`).hidden = k !== v);
+  if (v === "schema") showSchema();
+  if (v === "audit") showAudit();
+}
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => setView(b.dataset.view));
+$("#changes").onclick = e => { const b = e.target.closest("[data-id]"); if (b) open(b.dataset.id); };
+$("#sample").onchange = e => { const s = samples[e.target.value]; if (!s) return; $("#title").value = s.title; $("#sql").value = s.sql; $("#by").value = s.requested_by; };
+$("#form").onsubmit = async e => {
+  e.preventDefault();
+  const b = $("#submit"); b.disabled = true; b.innerHTML = `<span class="spin"></span> Agents working…`;
+  try {
+    current = await api("/api/changes", { title: $("#title").value, sql: $("#sql").value, requested_by: $("#by").value });
+    render(); loadList(); toast(`${current.id}: ${current.risk ? current.risk.level + " risk, " : ""}${current.status.replace(/_/g, " ").toLowerCase()}`);
+  } catch (err) { toast(err.message); }
+  b.disabled = false; b.textContent = "Run agents";
+};
+$("#reset").onclick = async () => {
+  if (!confirm("Re-seed the sandbox database and clear all change requests?")) return;
+  await api("/api/reset", {}); current = null;
+  $("#detail").innerHTML = `<div class="card empty">Sandbox reset. Pick a sample and press <b>Run agents</b>.</div>`;
+  loadList(); if (view !== "changes") setView(view); toast("Sandbox reset");
+};
+
+(async () => {
+  samples = await api("/api/samples");
+  $("#sample").innerHTML += samples.map((s, i) => `<option value="${i}">${esc(s.title)}</option>`).join("");
+  loadList();
+})();
+</script>
+</body>
+</html>
